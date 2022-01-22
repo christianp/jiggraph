@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <title>JIGGRAPH</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <style>
+
+html {
+    font-size: 18px;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background: hsl(123.9, 57.7%, 41.8%);
+}
+
+.app {
+    width: 100vw;
+    height: 100vh;
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: background-color 0.2s;
+}
+#controls {
+    justify-content: center;
+    position: absolute;
+    display: grid;
+    grid-gap: 1em;
+    grid-auto-flow: column;
+    align-items: center;
+    justify-items: center;
+    font-size: 2rem;
+    font-family: sans-serif;
+    background: hsla(0,0%,100%,0.3);
+    width: 100%;
+    padding: 0.2em;
+    box-sizing: border-box;
+}
+#controls button {
+    font-size: 1em;
+    background: #ffcc4d;
+    border: none;
+    border-radius: 0.15em;
+    width: 1.5em;
+    height: 1.5em;
+    line-height: 1.5em;
+}
+#controls button:disabled {
+}
+#level-number {
+    width: 3em;
+    text-align: center;
+}
+.app svg {
+    width: 100%;
+    height: 100%;
+}
+.edge-part line {
+    stroke-width: 0.5;
+}
+.edge-part line.shadow {
+    stroke-width: 0.6;
+}
+
+.grass {
+    stroke-width: 0.1;
+}
+  
+@media screen and (max-width: 600px) {
+    html {
+        font-size: 3vw;
+    }
+}
+
+  </style>
+  <script src="main.js"></script>
+  <script src="embed-app.js" defer></script>
+  <script src="show-error.js" defer></script>
+</head>
+<body>
+  <main>
+      <jiggraph-app></jiggraph-app>
+  </main>
+</body>
+</html>
+
