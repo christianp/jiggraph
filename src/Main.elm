@@ -404,9 +404,10 @@ arrange_pieces pieces =
             let
                 x = modBy w i
                 y = (i - x) // w
-                size = view_width / (tf w)
-                px = -view_width/2 + ((tf x)+0.5)*(size)
-                py = -view_width/2 + ((tf y)+0.5)*(size)
+                padding = view_width * 0.15
+                size = (view_width - 2*padding) / (tf w)
+                px = -view_width/2 + ((tf x)+0.5)*(size) + padding
+                py = -view_width/2 + ((tf y)+0.5)*(size) + padding
             in
                 { p | position = (px,py) }
     in

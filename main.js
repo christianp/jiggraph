@@ -7719,9 +7719,10 @@ var $author$project$Main$arrange_pieces = function (pieces) {
 		function (i, p) {
 			var x = A2($elm$core$Basics$modBy, w, i);
 			var y = ((i - x) / w) | 0;
-			var size = $author$project$Main$view_width / $author$project$Util$tf(w);
-			var py = ((-$author$project$Main$view_width) / 2) + (($author$project$Util$tf(y) + 0.5) * size);
-			var px = ((-$author$project$Main$view_width) / 2) + (($author$project$Util$tf(x) + 0.5) * size);
+			var padding = $author$project$Main$view_width * 0.15;
+			var size = ($author$project$Main$view_width - (2 * padding)) / $author$project$Util$tf(w);
+			var px = (((-$author$project$Main$view_width) / 2) + (($author$project$Util$tf(x) + 0.5) * size)) + padding;
+			var py = (((-$author$project$Main$view_width) / 2) + (($author$project$Util$tf(y) + 0.5) * size)) + padding;
 			return _Utils_update(
 				p,
 				{
