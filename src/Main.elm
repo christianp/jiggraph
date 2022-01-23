@@ -396,11 +396,12 @@ set_graph g model =
     in
         animate_pieces old_level.pieces nmodel.current_level.pieces nmodel
 
-arrange_pieces pieces =
+show_grid pieces =
     let
         n = List.length pieces
         w = (sqrt >> ceiling) (tf n)
-        place_piece i p =
+        rows_used = n // w
+        place_piece i =
             let
                 x = modBy w i
                 y = (i - x) // w
@@ -408,6 +409,24 @@ arrange_pieces pieces =
                 size = (view_width - 2*padding) / (tf w)
                 px = -view_width/2 + ((tf x)+0.5)*(size) + padding
                 py = -view_width/2 + ((tf y)+0.5)*(size) + padding
+            in
+                Svg.rect [SA.x (ff (px-0.4*size)), SA.y (ff (py-0.4*size)), SA.width (ff (size*0.8)), SA.height (ff (size*0.8))] []
+    in
+        Svg.g [] (List.map place_piece (List.range 0 (w*w-1)))
+
+arrange_pieces pieces =
+    let
+        n = List.length pieces
+        w = (sqrt >> ceiling) (tf n)
+        rows_used = n // w
+        place_piece i p =
+            let
+                x = modBy w i
+                y = (i - x) // w
+                padding = view_width * 0.15
+                size = (view_width - 2*padding) / (tf w)
+                px = -view_width/2 + ((tf x)+0.5)*(size) + padding
+                py = -view_width/2 + ((tf y)+0.5)*(size) + padding + (tf (w-rows_used))/4 * size
             in
                 { p | position = (px,py) }
     in
