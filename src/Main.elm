@@ -64,6 +64,14 @@ type alias Model =
     , time : Posix
     , selected_piece: Maybe (Int,Piece)
     , show_hint: Bool
+    , confirm_regen : Bool
+    }
+
+type alias ViewPieceContext =
+    { current_level : Level
+    , dt : Float
+    , selected_piece : Maybe Int
+    , is_interactive : Bool
     }
 
 type alias Piece =
@@ -154,7 +162,7 @@ distance_from_piece pos piece =
     in
         max 0 (d - 1)
 
-pick_piece buffer pos = (List.indexedMap (\i -> \p -> ((i,p), distance_from_piece pos p))) >> List.filter (\(_,d) -> d <= buffer) >> List.sortBy second >> List.map first >> List.head
+pick_piece buffer pos = (List.indexedMap (\i -> \p -> ((i,p), distance_from_piece pos p))) >> List.reverse >> List.filter (\(_,d) -> d <= buffer) >> List.sortBy second >> List.map first >> List.head
 
 end_touches : List TouchInfo -> Model -> Model
 end_touches touches model = List.foldl (\touch -> \m -> case touch of
@@ -250,11 +258,15 @@ make_pieces g =
 nocmd model = (model, Cmd.none)
 
 update msg model = case msg of
-    SetGraph g -> set_graph (smoosh_graph g) model |> nocmd |> save
-    Reset -> set_graph model.current_level.graph model |> nocmd |> save
-    NextLevel ->  next_level model |> save
-    PreviousLevel ->  previous_level model |> save
-    NewRandomGraph -> new_graph model
+    SetGraph g -> set_graph (smoosh_graph g) model |> hide_hint |> nocmd |> save
+    Reset -> set_graph model.current_level.graph model |> hide_hint |> nocmd |> save
+    NextLevel ->  next_level model |> Tuple.mapFirst hide_hint |> save
+    PreviousLevel ->  previous_level model |> Tuple.mapFirst hide_hint |> save
+    NewRandomGraph -> 
+        if can_regen model then 
+            new_graph model 
+        else 
+            { model | confirm_regen = True } |> nocmd
     MouseDown button -> (start_press model.mouse (Mouse button) model, Cmd.none)
     MouseUp button -> end_press (Mouse button) model |> nocmd |> save
     MouseMove x y -> (set_mouse (x,y) >> set_press_position is_mouse_press (x,y) >> after_move) model |> nocmd
@@ -266,6 +278,8 @@ update msg model = case msg of
     _ -> nocmd model
 
 frame t = set_time t >> update_animation
+
+hide_hint model = { model | show_hint = False }
 
 set_time t model = { model | time = t }
 
@@ -301,10 +315,6 @@ animate_piece start_time model i (piece,destination_piece) =
 next_level model =  case model.next_levels of
     level::rest -> (animate_pieces model.current_level.pieces level.pieces { model | previous_levels = model.current_level::model.previous_levels, current_level = level, next_levels = rest }, Cmd.none)
     [] -> new_graph { model | previous_levels = model.current_level::model.previous_levels, current_level = blank_level (model.current_level.n+1), next_levels = [], animation_state = ChangingLevel model.current_level }
-
--- versions that don't save the levels
---next_level = animate_level_change (\model -> new_graph { model | previous_levels = [], current_level = blank_level (model.current_level.n+1), next_levels = [] })
---previous_level = animate_level_change (\model -> new_graph { model | previous_levels = [], current_level = blank_level (model.current_level.n-1), next_levels = [] })
 
 previous_level model =
     if model.current_level.n <= 3 then 
@@ -392,7 +402,7 @@ set_graph g model =
         old_level = case model.animation_state of
             ChangingLevel o -> o
             _ -> model.current_level
-        nmodel = { model | current_level = { graph = g, pieces = pieces, n = List.length pieces, arm_matches = [] }, selected_piece = Nothing } |> find_all_arm_matches
+        nmodel = { model | current_level = { graph = g, pieces = pieces, n = List.length pieces, arm_matches = [] }, selected_piece = Nothing, confirm_regen = False } |> find_all_arm_matches
     in
         animate_pieces old_level.pieces nmodel.current_level.pieces nmodel
 
@@ -469,6 +479,7 @@ blank_model =
     , time = Time.millisToPosix 0
     , selected_piece = Nothing
     , show_hint = False
+    , confirm_regen = False
     }
 
 tabbable = HA.attribute "tabindex" "0"
@@ -533,11 +544,17 @@ controls model =
         , button 
             [ HE.onClick ToggleHint
             , HA.id "toggle-hint"
+            , classList 
+                [ ("active", model.show_hint)
+                ]
             ]
             [Html.text "?"]
         , button 
             [ HE.onClick NewRandomGraph
             , HA.id "re-randomise"
+            , classList 
+                [ ("clicked-once", can_regen model)
+                ]
             ]
             [Html.text "🎲"]
         , button 
@@ -620,8 +637,14 @@ view_pieces model =
         pieces = case model.animation_state of
             MovingPieces mpieces _ -> mpieces
             _ -> List.map (\p -> (p, p)) model.current_level.pieces
+        view_piece_context =
+            { current_level = model.current_level
+            , dt = animation_time model
+            , selected_piece = Maybe.map first model.selected_piece
+            , is_interactive = model.animation_state == Interactive
+            }
     in
-        g [SA.id "pieces"] (List.indexedMap (view_piece model) pieces)
+        g [SA.id "pieces"] (List.indexedMap (view_piece view_piece_context) pieces)
 
 get_edge : Graph -> Edge -> Maybe Segment
 get_edge graph (i,j) =
@@ -668,6 +691,8 @@ view_point graph i point =
         []
         [ circle 1 point [ classList [("point",True)] ]
         ]
+
+can_regen model = model.confirm_regen || all_pieces_fit model.current_level
 
 angle_to_piece from to =
     let
@@ -742,27 +767,30 @@ skin_tone_color_darker i =
         3 -> "hsl(20.3, 33.3%, 16.5%)"
         _ -> "black"
 
-view_piece : Model -> Int -> (Piece, Piece) -> Svg Msg
-view_piece model i (piece,destination_piece) =
+-- selected_piece, animation_time, current_level, animation_state, 
+
+view_piece : ViewPieceContext -> Int -> (Piece, Piece) -> Svg Msg
+view_piece context i (piece,destination_piece) =
     let
-        is_selected = (Maybe.map first model.selected_piece) == Just i
-        not_selected = model.selected_piece /= Nothing && not is_selected
-        dt = animation_time model
+        is_selected = context.selected_piece == Just i
+        not_selected = context.selected_piece /= Nothing && not is_selected
+        dt = context.dt
         (x,y) = piece.position
         dot = circle 1 piece.position
             [ classList [("dot",True)]
             ]
-        num_fitting_angles = List.length <| List.filter (\(ei,angle) -> arm_fits i ei model.current_level) (List.indexedMap pair piece.arms)
+        num_fitting_angles = List.length <| List.filter (\(ei,angle) -> arm_fits i ei context.current_level) (List.indexedMap pair piece.arms)
         skin_tone = apply_skin_tone (modBy 4 i)
-        face_emoji = case model.animation_state of
-            Interactive -> 
+        face_emoji = 
+            if context.is_interactive then
                 if num_fitting_angles == 0 then
                     "😐"
                 else if num_fitting_angles == List.length piece.arms then
-                    if all_pieces_fit model.current_level then "🥳" else "😀"
+                    if all_pieces_fit context.current_level then "🥳" else "😀"
                 else
                     "🙂"
-            _ -> "🤔"
+            else 
+                "🤔"
         face = text 2 (x,y) face_emoji []
         view_arm ei =
             let
@@ -779,15 +807,19 @@ view_piece model i (piece,destination_piece) =
                 size2 = size_for_mangle mangle2
 
                 angle = lerp angle1 angle2 dt
-                closest_piece = Maybe.map (\m -> m.piece) (arm_fits_with i ei model.current_level)
+                closest_piece = Maybe.map (\m -> m.piece) (arm_fits_with i ei context.current_level)
                 dangle = Maybe.withDefault angle (Maybe.map (angle_to_piece piece) closest_piece)
                 unconnected_size = 3
-                size = case model.animation_state of
-                    Interactive -> Maybe.withDefault unconnected_size (Maybe.map (\p2 -> -0.05 + (distance_to_piece piece p2)/2) closest_piece)
-                    _ -> (lerp size1 size2 dt) * unconnected_size
-                fits = case model.animation_state of
-                    Interactive -> arm_fits i ei model.current_level
-                    _ -> False
+                size = 
+                    if context.is_interactive then
+                        Maybe.withDefault unconnected_size (Maybe.map (\p2 -> -0.05 + (distance_to_piece piece p2)/2) closest_piece)
+                    else
+                        (lerp size1 size2 dt) * unconnected_size
+                fits = 
+                    if context.is_interactive then
+                        arm_fits i ei context.current_level
+                    else
+                        False
                 end = V.add piece.position (V.smul size (cos dangle, sin dangle))
                 edge =
                     g
@@ -806,7 +838,7 @@ view_piece model i (piece,destination_piece) =
                             ]
                             (piece.position, end)
                         ]
-                dir = case (indexOf piece model.current_level.pieces, Maybe.andThen (\p2 -> indexOf p2 model.current_level.pieces) closest_piece) of
+                dir = case (indexOf piece context.current_level.pieces, Maybe.andThen (\p2 -> indexOf p2 context.current_level.pieces) closest_piece) of
                     (Just a, Just b) -> a<b
                     _ -> True
                 symbol = if fits then if dir then "✋" else "🤚" else "✊"
@@ -829,7 +861,7 @@ view_piece model i (piece,destination_piece) =
         g 
             [ classList 
                 [ ("piece",True)
-                , ("fits", piece_fits model.current_level i piece)
+                , ("fits", piece_fits context.current_level i piece)
                 , ("not-selected", not_selected)
                 , ("selected", is_selected)
                 ]

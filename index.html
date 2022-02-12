@@ -47,6 +47,12 @@ body {
     height: 1.5em;
     line-height: 1.5em;
 }
+#controls button.active {
+    background: hsl(180.8, 100%, 65.1%);
+}
+#controls button.clicked-once {
+    background: hsl(302.8, 100%, 65.1%);
+}
 #controls button:disabled {
 }
 #level-number {
@@ -66,6 +72,10 @@ body {
 
 .grass {
     stroke-width: 0.1;
+}
+
+.piece > text {
+    text-shadow: 0 0 3px black;
 }
   
 @media screen and (max-width: 600px) {
